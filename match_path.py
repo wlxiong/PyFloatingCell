@@ -89,9 +89,17 @@ def match_handover_seq(handover_seq):
 
 def process_inquries(inquiry_tab):
     match_tab = [ ]
-    for inquiry in inquiry_tab:
-        match_tab.append(match_handover_seq(inquiry))
+    for vehicle_ID, sequence in inquiry_tab:
+        matched_seq = match_handover_seq(sequence)
+        match_tab.append( (vehicle_ID, matched_seq) )
     return match_tab
+
+def read_inquiries(csv_reader):
+    " read the inquiries from csv file"
+    inquiries = [] 
+    for line in csv_reader:
+        inquiries.append( ( line[0], line[1:] ) )
+    return inquiries
 
 def read_handovers(csv_reader):
     " read the records from csv file"
@@ -109,14 +117,16 @@ def read_coordinations(csv_reader):
 
 def write_matched_inquiries(match_tab, csv_writer):
     " write the results of the inquiries"
-    # 'FROM_NODE', 'TO_NODE', 'COORD_X', 'COORD_Y'
-    csv_writer.writerow(['FROM_NODE', 'TO_NODE', 'COORD_X', 'COORD_Y'])
-    for matched_handovers in match_tab:
+    # 'GLOBALVEHICLEID', 'FROM_NODE', 'TO_NODE', 'COORD_X', 'COORD_Y'
+    csv_writer.writerow(['GLOBALVEHICLEID', 'FROM_NODE', 'TO_NODE', 'COORD_X', 'COORD_Y'])
+    for vehicle_ID, matched_handovers in match_tab:
         for edge in matched_handovers:
             # print ( edge.nodes[0].name, edge.nodes[1].name ) + edge.estimated_coord
-            csv_writer.writerow( (  edge.nodes[0].name, edge.nodes[1].name ) + \
-                                    edge.avg_handover_coord() )
-        csv_writer.writerow( ['---', '---', '---', '---'] ) 
+            csv_writer.writerow( ( vehicle_ID, 
+                                   edge.nodes[0].name, 
+                                   edge.nodes[1].name ) + \
+                                   edge.avg_handover_coord() )
+        csv_writer.writerow( ['---', '---', '---', '---', '---'] ) 
 
 def write_handover_graph(csv_writer):
     " write the handover graph to a csv file"
@@ -152,7 +162,7 @@ def main(argv=None):
     sample_tab = read_handovers(sample_reader)
     coord_x = read_coordinations(coord_x_reader)
     coord_y = read_coordinations(coord_y_reader)
-    inquiry_tab = read_handovers(inquiry_reader)
+    inquiry_tab = read_inquiries(inquiry_reader)
 
     # generate the handover graph
     gen_handover_graph(sample_tab, coord_x, coord_y)
