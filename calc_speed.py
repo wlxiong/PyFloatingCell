@@ -1,5 +1,51 @@
+# Calculate real journey speed
+# 
+# Usage:
+#       python calc_speed.py vehicle_record_file
+#
+# Outputs:
+#       The output is a csv file whose name consists of the string 
+#       "vehicle_record_file" and a suffix "_speed". 
+# 
+# Arguments: 
+#       "vehicle_record_file" is a csv file containing a set of vehicle records. 
+# 
+# Input file sample:
+# | GLOBALVEHICLEID |  VEHICLE_X |  VEHICLE_Y | UPNODE | DOWNNODE | SIMULATIONTIME |   LINKID |      Length | Handoff_Tag |
+# |-----------------|------------|------------|--------|----------|----------------|----------|-------------|-------------|
+# |             425 | 29332.3534 | 17907.0355 |    264 |        3 |             30 |  2640003 | 90.00005738 |           0 |
+# |             425 | 29242.4418 | 17911.0248 |    264 |        3 |             31 |  2640003 |  88.9999713 |           1 |
+# |             425 | 29153.5293 | 17914.9697 |    264 |        3 |             32 |  2640003 | 90.00005295 |           0 |
+# ...
+# |             425 | 22874.2628 | 17734.0031 |     21 |      199 |             96 |   210199 | 100.9999769 |           0 |
+# |             425 |  22774.485 | 17749.6679 |     21 |      199 |             97 |   210199 | 101.4241947 |           1 |
+# |             425 | 22678.9849 | 17783.8234 |    199 |       23 |             98 |  1990023 | 102.0000187 |           0 |
+# ...
+# 
+# Output file sample:
+# | GLOBALVEHICLEID |  VEHICLE_X |  VEHICLE_Y | UPNODE | DOWNNODE | SIMULATIONTIME |   LINKID |      Length | Handoff_Tag |       MILEAGE |      VELOCITY |
+# |-----------------|------------|------------|--------|----------|----------------|----------|-------------|-------------|---------------|---------------|
+# |             425 | 29242.4418 | 17911.0248 |    264 |        3 |             31 |  2640003 |  88.9999713 |           1 | 3073.83560296 |          -1.0 |
+# |             425 |  22774.485 | 17749.6679 |     21 |      199 |             97 |   210199 | 101.4241947 |           1 | 9556.88310835 | 98.2279925059 |
+# ...
+# 
+#  calc_speed.py
+#  PyFloatingCell
+#  
+#  Created by Xiong Yiliang on 2011-05-29.
+#  Copyright 2011 Xiong Yiliang. All rights reserved.
+# 
+
 import os
 import csv
+
+def create_csv_reader(filepath):
+    csv_file = open(filepath, 'rU')
+    csv_reader = csv.reader(csv_file)
+    # if the first row is heading, skip it
+    if csv.Sniffer().has_header( csv_file.read(1) ):
+        csv_reader.next()
+    return csv_reader
 
 def read_records(csv_reader):
     vehicle_records = []
@@ -9,9 +55,8 @@ def read_records(csv_reader):
         # SIMULATIONTIME, LINKID, Length, Handoff_Tag
         h, x, y, p, q, t, l, n, g = record[0], record[1], record[2], record[3], record[4], \
                                     record[5], record[6], record[7], record[8]
-        if h.isdigit():
-            vehicle_records.append( ( int(h), float(x), float(y), int(p), int(q), \
-                                      int(t), int(l), float(n), int(g) ) )
+        vehicle_records.append( ( int(h), float(x), float(y), int(p), int(q), \
+                                  int(t), int(l), float(n), int(g) ) )
     return vehicle_records
 
 def write_speeds(csv_writer, speed_records):
@@ -65,7 +110,7 @@ def main(argv=None):
         sys.stderr.write(' no input file')
 
     # read data
-    record_reader = csv.reader(open(record_filename, 'rU'))
+    record_reader = create_csv_reader(record_filename)
     vehicle_records = read_records(record_reader)
     # calculate mileage
     mileage_records = calc_vehicle_mileage(vehicle_records)

@@ -1,10 +1,66 @@
-# extract vehicle tracks from the full vehicle records
+# Extract vehicle tracks from the full vehicle records
+# 
+# Usage:
+#       python extract_tracks.py vehicle_record_file road_link_file
+#
+# Outputs:
+#       The output is a csv file whose name consists of the string 
+#       "vehicle_record_file" and a suffix "_sampled". 
+# 
+# Arguments:
+#       1) "vehicle_record_file" is a csv file containing a set of vehicle records. 
+#       2) "road_link_file" is a csv file defining the nodes on a road. 
+# 
+# Input file sample 1 (vehicle_record_file): 
+# | SIMULATIONTIME | UPNODE | DOWNNODE | GLOBALVEHICLEID | FLEET | VEHICLETYPE | VEHICLELENGTH | DRIVERTYPE | LANEID | VEHICLEPOSITION | PREVIOUSUSN | TURNCODE | QUEUESTATUS | ACCELERATION | VELOCITY | LANECHANGESTATUS | TARGETLANE | DESTINATIONNODE | LEADERVEHICLEID | FOLLOWERVEHICLEID | PREVIOUSLANEID | LINKID | UPNODEX | UPNODEY | DOWNNODEX | DOWNNODEY |  VEHICLE_X |  VEHICLE_Y |
+# |----------------|--------|----------|-----------------|-------|-------------|---------------|------------|--------|-----------------|-------------|----------|-------------|--------------|----------|------------------|------------|-----------------|-----------------|-------------------|----------------|--------|---------|---------|-----------|-----------|------------|------------|
+# |              0 |     53 |       42 |             148 |     0 |           1 |            16 |          3 |      4 |             249 |          56 |        1 |           0 |            0 |       34 |                0 |          0 |               0 |             662 |               234 |              2 | 530042 |   17141 |   21130 |     16434 |     21882 |  16970.442 | 21311.4138 |
+# |              1 |     53 |       42 |             148 |     0 |           1 |            16 |          3 |      4 |             283 |          56 |        1 |           0 |            0 |       34 |                0 |          0 |               0 |             662 |               234 |              2 | 530042 |   17141 |   21130 |     16434 |     21882 |  16947.153 | 21336.1852 |
+# |              2 |     53 |       42 |             148 |     0 |           1 |            16 |          3 |      4 |             317 |          56 |        1 |           0 |            0 |       34 |                0 |          0 |               0 |             662 |               234 |              2 | 530042 |   17141 |   21130 |     16434 |     21882 |  16923.864 | 21360.9566 |
+# |              3 |     53 |       42 |             148 |     0 |           1 |            16 |          3 |      4 |             351 |          56 |        1 |           0 |            0 |       34 |                0 |          0 |               0 |             662 |               234 |              2 | 530042 |   17141 |   21130 |     16434 |     21882 | 16900.5749 | 21385.7279 |
+# |              4 |     53 |       42 |             148 |     0 |           1 |            16 |          3 |      4 |             385 |          56 |        1 |           0 |            0 |       34 |                0 |          0 |               0 |             662 |               234 |              2 | 530042 |   17141 |   21130 |     16434 |     21882 | 16877.2859 | 21410.4993 |
+# ...
+#
+# Input file sample 2 (road_link_file): 
+# |  Link_ID | Up_Node | Down_Node | Up_Node_X | Up_Node_Y | Down_Node_X | Down_Node_Y |
+# |----------|---------|-----------|-----------|-----------|-------------|-------------|
+# | 8013_195 |    8013 |       195 |     45185 |     20926 |       45047 |       20913 |
+# |  195_227 |     195 |       227 |     45047 |     20913 |       44277 |       20857 |
+# |  227_194 |     227 |       194 |     44277 |     20857 |       43598 |       20806 |
+# |  194_189 |     194 |       189 |     43598 |     20806 |       43307 |       20735 |
+# ...
+# 
+# Output file sample:
+# | GLOBALVEHICLEID | SIMULATIONTIME | UPNODE | DOWNNODE |   LINKID |  VEHICLE_X |  VEHICLE_Y | VELOCITY |
+# |-----------------|----------------|--------|----------|----------|------------|------------|----------|
+# |             412 |              0 |    127 |      160 |  1270160 |  4795.2054 | 40206.0577 |       96 |
+# |             412 |              1 |    127 |      160 |  1270160 |  4845.3777 | 40289.0742 |       97 |
+# |             412 |              2 |    127 |      160 |  1270160 |    4895.55 | 40372.0907 |       96 |
+# |            1172 |             90 |      3 |        4 |    30004 | 28096.1544 | 17959.0966 |       99 |
+# ...
+# 
+#  extract_tracks.py
+#  PyFloatingCell
+#  
+#  Created by Xiong Yiliang on 2011-05-29.
+#  Copyright 2011 Xiong Yiliang. All rights reserved.
+# 
+
+import os
 import csv
 from random import sample
 from random import randint
 
 sample_rate_tests = [.02, .10]
 sample_interval_tests = [(0, 60), (60, 120), (120, 180)]
+
+def create_csv_reader(filepath):
+    csv_file = open(filepath, 'rU')
+    csv_reader = csv.reader(csv_file)
+    # if the first row is heading, skip it
+    if csv.Sniffer().has_header( csv_file.read(1) ):
+        csv_reader.next()
+    return csv_reader
 
 def read_records(csv_reader):
     vehicle_records = []
@@ -105,9 +161,9 @@ def main(argv=None):
         sys.stderr.write(' at least two files should be provided')
 
     # read data
-    record_reader = csv.reader(open(record_filename, 'rb'))
+    record_reader = create_csv_reader(record_filename)
     vehicle_records = read_records(record_reader)
-    link_reader = csv.reader(open(link_filename, 'rb'))
+    link_reader = create_csv_reader(link_filename)
     link_list = read_links(link_reader)
     # sampling process
     for sample_rate in sample_rate_tests:
@@ -127,8 +183,9 @@ def main(argv=None):
             print "len(sampled_records) = %d" % len(sampled_records)
             print "len(sampled_tracks) = %d" % len(sampled_tracks)
             print '====================='
-            track_writer = csv.writer(open('sampled_'+
-                str(sample_rate)+'_'+str(sample_interval)+'_'+record_filename, 'wb'))
+            (shortname, extension) = os.path.splitext(record_filename)
+            track_writer = csv.writer(open(shortname+'_sampled_'+\
+                str(sample_rate)+'_'+str(sample_interval)+extension, 'wb'))
             write_tracks(track_writer, sampled_tracks)
 
 if __name__ == "__main__":
