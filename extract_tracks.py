@@ -51,8 +51,8 @@ import csv
 from random import sample
 from random import randint
 
-sample_rate_tests = [.02, .10]
-sample_interval_tests = [(0, 60), (60, 120), (120, 180)]
+sample_rate_tests = [.02]
+sample_interval_tests = [(120, 180)]
 
 def create_csv_reader(filepath):
     csv_file = open(filepath, 'rU')
@@ -85,34 +85,14 @@ def read_links(csv_reader):
         road_links[(p,q)] = l
     return road_links
 
-def write_tracks(csv_writer, sampled_tracks):
+def write_records(csv_writer, sampled_tracks):
     # vehicle ID, simulaiton time, link ID, coord_x, coord_y, speed 
     csv_writer.writerow(['GLOBALVEHICLEID', 'SIMULATIONTIME', 
         'UPNODE', 'DOWNNODE', 'LINKID', 'VEHICLE_X', 'VEHICLE_Y', 'VELOCITY'])
     csv_writer.writerows(sampled_tracks)
-    
-def sample_vehicles(road_links, vehicle_records, sample_rate):
-    vehicle_set = set()
-    for record in vehicle_records:
-        vehicle_ID = record[0]
-        upnode = record[2]
-        downnode = record[3]
-        if (upnode, downnode) in road_links:
-            vehicle_set.add(vehicle_ID)
-    num_vehicle = len(vehicle_set)
-    # generate the set of sampled vehicles
-    sampled_vehicles = set(sample(list(vehicle_set), int(sample_rate * num_vehicle)))
-    # select the records of sampled vehicles
-    sampled_records = []
-    for record in vehicle_records:
-        if record[0] in sampled_vehicles:
-            sampled_records.append(record)
-    # sort the records according to vehicle ID and simulation time
-    sampled_records.sort()
-    return sampled_vehicles, sampled_records
 
-def sample_tracks(vehicle_set, vehicle_records, road_links, sample_interval):
-    # find the entering time and leaving time for each vehicle 
+def sample_vehicles(vehicle_records, road_links, sample_interval, sample_rate):
+    vehicle_set = set()
     entering_time = {}
     leaving_time = {}
     for record in vehicle_records:
@@ -121,35 +101,50 @@ def sample_tracks(vehicle_set, vehicle_records, road_links, sample_interval):
         upnode = record[2]
         downnode = record[3]
         if (upnode, downnode) in road_links:
+            # select vehicles riding on the specific road links
+            vehicle_set.add(vehicle_ID)
+            # find the entering time and leaving time for each vehicle 
             if vehicle_ID not in entering_time or entering_time[vehicle_ID] > time_record:
                 entering_time[vehicle_ID] = time_record
             if vehicle_ID not in leaving_time or leaving_time[vehicle_ID] < time_record:
                 leaving_time[vehicle_ID] = time_record
+    for vehicle_ID in list(vehicle_set):
+        if leaving_time[vehicle_ID] - entering_time[vehicle_ID] < sample_interval[0]:
+            # skip the vehicle with insufficient duration 
+            vehicle_set.remove(vehicle_ID)
+    # generate the vehicle IDs with the given sample rate
+    num_vehicle = len(vehicle_set)
+    sampled_vehicles = set(sample(list(vehicle_set), int(sample_rate * num_vehicle)))
+    # select the records of sampled vehicles
+    sampled_records = []
+    for record in vehicle_records:
+        if record[0] in sampled_vehicles:
+            sampled_records.append(record)
+    # sort the records according to vehicle ID and simulation time
+    sampled_records.sort()
+    return sampled_vehicles, sampled_records, entering_time, leaving_time, vehicle_set
+
+def sample_records(vehicle_set, vehicle_records, entering_time, leaving_time, sample_interval):
     # generate a random calling duration for each vehicle
     calling_duration = {}
     for vehicle_ID in vehicle_set:
         calling_duration[vehicle_ID] = randint(sample_interval[0], sample_interval[1])
-    # calculate the start and end of each call
+    # calculate the start and end of each phone call
     calling_start = {}
     calling_end = {}
     for vehicle_ID in vehicle_set:
-        if leaving_time[vehicle_ID] - entering_time[vehicle_ID] < calling_duration[vehicle_ID]:
-            # extract all the time window of the vehicle 
-            calling_start[vehicle_ID] = entering_time[vehicle_ID]
-            calling_end[vehicle_ID] = leaving_time[vehicle_ID]
-        else:
-            # center the calling duration in the time window
-            calling_start[vehicle_ID] = (entering_time[vehicle_ID] + leaving_time[vehicle_ID]) // 2 - \
-                                        calling_duration[vehicle_ID] // 2
-            calling_end[vehicle_ID] = calling_start[vehicle_ID] + calling_duration[vehicle_ID] - 1
+        # center the calling duration in the time window
+        calling_start[vehicle_ID] = (entering_time[vehicle_ID] + leaving_time[vehicle_ID]) // 2 - \
+                                    calling_duration[vehicle_ID] // 2
+        calling_end[vehicle_ID] = calling_start[vehicle_ID] + calling_duration[vehicle_ID] - 1
     # extract the records within the calling interval 
-    sampled_tracks = []
+    sampled_records = []
     for record in vehicle_records:
         vehicle_ID = record[0]
         time_record = record[1]
         if calling_start[vehicle_ID] <= time_record <= calling_end[vehicle_ID]:
-            sampled_tracks.append(record)
-    return sampled_tracks
+            sampled_records.append(record)
+    return sampled_records, calling_start, calling_end
 
 def main(argv=None):
     if argv is None:
@@ -168,25 +163,30 @@ def main(argv=None):
     # sampling process
     for sample_rate in sample_rate_tests:
         for sample_interval in sample_interval_tests:
-            print '====================='
-            print "sample_rate = %f, sample_interval = %s" % (sample_rate, sample_interval)
-            print '---------------------'
-            print 'extract_fields(csv_file)'
-            sampled_vehicles, sampled_records = sample_vehicles(link_list, vehicle_records, sample_rate)
-            print 'sample_vehicles(vehicle_list, vehicle_records)'
-            sampled_tracks = sample_tracks(sampled_vehicles, sampled_records, link_list, sample_interval)
-            print 'sample_tracks(sampled_vehicles, sampled_records)'
-            print '---------------------'
-            print "sampled_vehicles\n %s" % sampled_vehicles
-            print '---------------------'
-            print "len(sampled_vehicles) = %d" % len(sampled_vehicles)
-            print "len(sampled_records) = %d" % len(sampled_records)
-            print "len(sampled_tracks) = %d" % len(sampled_tracks)
-            print '====================='
+            print '\n====================='
+            sampled_vehicles, sampled_records, entering_time, leaving_time, vehicle_set = \
+                sample_vehicles(vehicle_records, link_list, sample_interval, sample_rate)
+            print ' sample_vehicles()'
+            sampled_records, calling_start, calling_end = \
+                sample_records(sampled_vehicles, sampled_records, entering_time, leaving_time, sample_interval)
+            print ' sample_records()'
+            
+            print '\n---------------------'
+            print " sample_rate = %f, sample_interval = %s" % ( sample_rate, sample_interval )
+            print " no. of vehicles in time interval %s: %d" % ( sample_interval, len(vehicle_set) )
+            print " no. of sampled vehicles: %d x %f = %d" % ( len(vehicle_set), sample_rate, len(sampled_vehicles) )
+            print " no. of sampled records:  %d" % len(sampled_records)
+            
+            print '\n---------------------'
+            print " sampled_vehicles:\n (ID, starting time, ending time, duration)"
+            for vehicle_ID in sorted(list(sampled_vehicles)):
+                print " %s\t %d\t %d\t %d" % ( vehicle_ID, calling_start[vehicle_ID], calling_end[vehicle_ID], 
+                                               calling_end[vehicle_ID] - calling_start[vehicle_ID] )
+            # save the sampled records 
             (shortname, extension) = os.path.splitext(record_filename)
             track_writer = csv.writer(open(shortname+'_sampled_'+\
                 str(sample_rate)+'_'+str(sample_interval)+extension, 'wb'))
-            write_tracks(track_writer, sampled_tracks)
+            write_records(track_writer, sampled_records)
 
 if __name__ == "__main__":
     import sys
